@@ -77,7 +77,13 @@
 </head>
 <body>
     <div id="chat-container">
-        <div id="chatbox"></div>
+        <div id="chatbox">
+            <!-- Preloaded welcome message -->
+            <div class="chat-message bot-message">
+                <strong>{{ assistant_name }}:</strong> Hello, I am "{{ assistant_name }} assistant". I can answer various questions about the company {{ assistant_name }}. 
+                You can ask me what the company does or about its products. I was also built by engineer Kobe, so feel free to ask me about him as well!
+            </div>
+        </div>
         <div id="input-container">
             <input type="text" id="user_input" placeholder="Type a message..." />
             <button id="send-button" onclick="sendMessage()">Send</button>

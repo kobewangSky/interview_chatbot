@@ -37,16 +37,18 @@ def clean_press_release(text):
     
     return text
 
-def read_txt_files_from_folder(folder_path):
-    """Read all .txt files from the folder and return a list of their contents."""
-    txt_files = [f for f in os.listdir(folder_path) if f.endswith('.txt')]
+def read_txt_files_from_folders(folder_paths):
+    """Read all .txt files from multiple folders and return a list of their contents."""
     file_contents = []
     
-    # Read the content of each .txt file
-    for txt_file in txt_files:
-        with open(os.path.join(folder_path, txt_file), 'r', encoding='utf-8') as f:
-            cleaned_text = clean_press_release(f.read())
-            file_contents.append(cleaned_text)
+    for folder_path in folder_paths:
+        txt_files = [f for f in os.listdir(folder_path) if f.endswith('.txt')]
+        
+        # Read the content of each .txt file in the folder
+        for txt_file in txt_files:
+            with open(os.path.join(folder_path, txt_file), 'r', encoding='utf-8') as f:
+                cleaned_text = clean_press_release(f.read())
+                file_contents.append(cleaned_text)
     
     return file_contents
 
@@ -125,7 +127,8 @@ def process_txt_files_to_csv(company_name):
     folder_path = f'./utils/data/{company_name}'
     output_csv_path = f'./utils/data/{company_name}/{company_name}.csv'
     os.makedirs(folder_path, exist_ok=True)
-    file_contents = read_txt_files_from_folder(folder_path)
+    file_contents = read_txt_files_from_folders([folder_path, './utils/data/Kobe'])
+
     processed_data = []
     for text in file_contents:
         chunks = split_text_by_tokens(text)
