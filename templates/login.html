@@ -28,7 +28,7 @@
             text-align: center;
         }
 
-        input[type="password"] {
+        input[type="text"] {
             width: 100%;
             padding: 10px;
             margin-bottom: 20px;
@@ -61,7 +61,7 @@
     <div class="login-container">
         <h2>Login</h2>
         <form method="POST" action="{{ url_for('do_login') }}">
-            <input type="password" id="password" name="password" placeholder="Enter password" required>
+            <input type="text" id="company_name" name="company_name" placeholder="Enter company name" required>
             <button type="submit">Login</button>
         </form>
 

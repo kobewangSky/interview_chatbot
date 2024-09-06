@@ -117,11 +117,11 @@ def login():
 
 @app.route('/login', methods=['POST'])
 def do_login():
-    password = request.form['password']
+    company_name = request.form['company_name']
     
     # Check if the password is valid
-    if password in PASSWORDS:
-        session['password'] = password
+    if company_name in PASSWORDS:
+        session['password'] = company_name
         return redirect(url_for('index'))
     else:
         flash("Invalid password. Please try again.")
