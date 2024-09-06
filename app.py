@@ -13,7 +13,8 @@ app = Flask(__name__)
 app.secret_key = secret_key
 
 PASSWORDS = {
-    "Montu": {"db_path": "./utils/data/Montu/Montu.csv", "assistant_name": "Montu"}
+    "montu": {"db_path": "./utils/data/Montu/Montu.csv", "assistant_name": "Montu"},
+    "hipagesgroup": {"db_path": "./utils/data/hipagesgroup/hipagesgroup.csv", "assistant_name": "hipagesgroup"}
     # Add more as needed
 }
 
@@ -117,7 +118,7 @@ def login():
 
 @app.route('/login', methods=['POST'])
 def do_login():
-    company_name = request.form['company_name']
+    company_name = request.form['company_name'].lower().strip()
     
     # Check if the password is valid
     if company_name in PASSWORDS:
