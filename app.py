@@ -14,7 +14,8 @@ app.secret_key = secret_key
 
 PASSWORDS = {
     "montu": {"db_path": "./utils/data/Montu/Montu.csv", "assistant_name": "Montu"},
-    "hipagesgroup": {"db_path": "./utils/data/hipagesgroup/hipagesgroup.csv", "assistant_name": "hipagesgroup"}
+    "hipagesgroup": {"db_path": "./utils/data/hipagesgroup/hipagesgroup.csv", "assistant_name": "hipagesgroup"},
+    "cbhs": {"db_path": "./utils/data/cbhs/cbhs.csv", "assistant_name": "cbhs"}
     # Add more as needed
 }
 
