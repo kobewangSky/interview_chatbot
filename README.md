@@ -9,11 +9,8 @@
 - [Setup](#setup)
 - [Usage](#usage)
   - [Running the App](#running-the-app)
-  - [API](#api)
   - [Login](#login)
-- [Database Management](#database-management)
-- [Text Processing and Scraping](#text-processing-and-scraping)
-- [License](#license)
+
 
 ## Overview
 
@@ -71,3 +68,13 @@ This project is a Flask-based web application integrated with OpenAI’s GPT mod
 To run the Flask application, use:
 ```bash
 python app.py
+```
+
+## Login
+
+### Login
+
+To login chatbot, need type company name in login page.
+
+
+
