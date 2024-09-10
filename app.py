@@ -5,31 +5,23 @@ import ast
 import tiktoken  # For token counting
 from scipy import spatial 
 import os
-
 import secrets
+
 secret_key = secrets.token_hex(32)
 
 app = Flask(__name__)
 app.secret_key = secret_key
 
-PASSWORDS = {
-    "montu": {"db_path": "./utils/data/Montu/Montu.csv", "assistant_name": "Montu"},
-    "hipagesgroup": {"db_path": "./utils/data/hipagesgroup/hipagesgroup.csv", "assistant_name": "hipagesgroup"},
-    "cbhs": {"db_path": "./utils/data/cbhs/cbhs.csv", "assistant_name": "cbhs"},
-    "woolworthsgroup": {"db_path": "./utils/data/woolworthsgroup/woolworthsgroup.csv", "assistant_name": "woolworthsgroup"}
-    # Add more as needed
-}
+# Define the base path where all the data folders are stored
+DATA_FOLDER_PATH = "./utils/data/"
 
 DATABASE_CACHE = {}
 
 api_key = os.getenv('OPENAI_API_KEY')
 
-client = OpenAI(api_key=api_key )
+client = OpenAI(api_key=api_key)
 EMBEDDING_MODEL = "text-embedding-3-small"
 GPT_MODEL = "gpt-3.5-turbo"
-
-# df = pd.read_csv(embeddings_path)
-# df['embedding'] = df['embedding'].apply(ast.literal_eval)
 
 def num_tokens(text: str, model: str = GPT_MODEL) -> int:
     """Return the number of tokens in a string."""
@@ -64,20 +56,16 @@ def query_message(
 ) -> str:
     """Return a message for GPT, with relevant source texts pulled from a dataframe."""
     strings, relatednesses = strings_ranked_by_relatedness(query, df, top_n=3)
-    introduction = 'Use the below articles answer the subsequent question."'
+    introduction = 'Use the below articles to answer the subsequent question."'
     question = f"\n\nQuestion: {query}"
     message = introduction
     for string in strings:
         next_article = f'\n\nArticle section:\n"""\n{string}\n"""'
-        if (
-            num_tokens(message + next_article + question, model=model)
-            > token_budget
-        ):
+        if num_tokens(message + next_article + question, model=model) > token_budget:
             break
         else:
             message += next_article
     return message + question
-
 
 def ask(
     query: str,
@@ -91,7 +79,7 @@ def ask(
     if print_message:
         print(message)
     messages = [
-        {"role": "system", "content": f"You are a {PASSWORDS[session['password']]['assistant_name']} helpful assistant."},
+        {"role": "system", "content": f"You are a {session['assistant_name']} helpful assistant."},
         {"role": "user", "content": message},
     ]
     response = client.chat.completions.create(
@@ -103,14 +91,18 @@ def ask(
     return response_message
 
 def load_database(password: str) -> pd.DataFrame:
-    """Loads the database and caches it. Returns the cached database if already loaded."""
+    """Loads the database from the corresponding folder if it exists."""
     if password in DATABASE_CACHE:
         return DATABASE_CACHE[password]
     
-    # If the database is not in cache, load from file and store in cache
-    db_path = PASSWORDS[password]['db_path'] 
+    db_path = os.path.join(DATA_FOLDER_PATH, password, f"{password}.csv")
+    
+    if not os.path.exists(db_path):
+        raise FileNotFoundError(f"No database found for {password} at {db_path}")
+    
     df = pd.read_csv(db_path)
     df['embedding'] = df['embedding'].apply(ast.literal_eval)
+    
     DATABASE_CACHE[password] = df
     return df
 
@@ -122,12 +114,14 @@ def login():
 def do_login():
     company_name = request.form['company_name'].lower().strip()
     
-    # Check if the password is valid
-    if company_name in PASSWORDS:
+    # Check if the corresponding folder exists in utils/data/
+    company_data_path = os.path.join(DATA_FOLDER_PATH, company_name)
+    if os.path.isdir(company_data_path):
         session['password'] = company_name
+        session['assistant_name'] = company_name  # Using the folder name as the assistant name
         return redirect(url_for('index'))
     else:
-        flash("Invalid password. Please try again.")
+        flash("Invalid company name. Please try again.")
         return redirect(url_for('login'))
 
 @app.route('/index')
@@ -135,8 +129,7 @@ def index():
     if 'password' not in session:
         return redirect(url_for('login'))
 
-    # Get the assistant name based on the password
-    assistant_name = PASSWORDS[session['password']]['assistant_name']
+    assistant_name = session['assistant_name']
     
     return render_template('index.html', assistant_name=assistant_name)
 
@@ -158,6 +151,3 @@ def chat():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
-
-
