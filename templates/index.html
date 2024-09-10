@@ -85,12 +85,18 @@
             </div>
         </div>
         <div id="input-container">
-            <input type="text" id="user_input" placeholder="Type a message..." />
+            <input type="text" id="user_input" placeholder="Type a message..." onkeydown="handleEnter(event)" />
             <button id="send-button" onclick="sendMessage()">Send</button>
         </div>
     </div>
 
     <script>
+        function handleEnter(event) {
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+        }
+
         async function sendMessage() {
             const userInput = document.getElementById('user_input').value;
             if (userInput.trim() === '') return;
