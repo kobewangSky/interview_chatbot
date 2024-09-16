@@ -5,10 +5,14 @@ import tiktoken  # Use tiktoken for token counting
 import re
 import pandas as pd
 import argparse
+from pinecone import Pinecone
+
 
 # Initialize OpenAI API key
 api_key = os.getenv('OPENAI_API_KEY')
-
+Pinecone_key = os.getenv('PINECONE_API_KEY')
+pc = Pinecone(api_key=Pinecone_key)
+index = pc.Index("interview-chatbot")
 
 client = OpenAI(api_key=api_key)
 
@@ -111,40 +115,47 @@ def generate_embedding(text, model=EMBEDDING_MODEL):
     embedding = response.data[0].embedding
     return embedding
 
-def save_to_csv(data, output_csv_path):
-    """
-    Save the data (summary, sub-summary, body, and embedding) to a CSV file 
-    by first converting it to a DataFrame.
-    """
-    # Convert data to a pandas DataFrame
-    df = pd.DataFrame(data, columns=["Summary", "Sub-summary", "Body", "embedding"])
-    
-    # Save the DataFrame to a CSV file
-    df.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
 
-def process_txt_files_to_csv(company_name):
-    """Read all .txt files from a folder, process them, and save to a CSV with the company name."""
+def process_txt_files_to_pinecone(company_name):
+    """Read all .txt files from a folder, process them, and upload to Pinecone."""
     folder_path = f'./utils/data/{company_name}'
-    output_csv_path = f'./utils/data/{company_name}/{company_name}.csv'
-    os.makedirs(folder_path, exist_ok=True)
     file_contents = read_txt_files_from_folders([folder_path, './utils/data/Kobe'])
 
-    processed_data = []
-    for text in file_contents:
+    vectors = []
+    for idx, text in enumerate(file_contents):
         chunks = split_text_by_tokens(text)
-        for chunk in chunks:
+        for chunk_idx, chunk in enumerate(chunks):
             summary, sub_summary = generate_summary_and_sub_summary(chunk)
             embedding = generate_embedding(summary)
-            processed_data.append((summary, sub_summary, chunk, embedding))
-    save_to_csv(processed_data, output_csv_path)
+            vector_id = f"{company_name}_{idx}_{chunk_idx}"
+            vectors.append({
+                "id": vector_id,
+                "values": embedding,
+                "metadata": {
+                    "company": company_name,
+                    "summary": summary,
+                    "sub_summary": sub_summary,
+                    "body": chunk
+                }
+            })
+            
+            # Upsert in batches of 100 to avoid hitting rate limits
+            if len(vectors) >= 100:
+                index.upsert(vectors=vectors, namespace=company_name)
+                vectors = []
 
+    # Upsert any remaining vectors
+    if vectors:
+        index.upsert(vectors=vectors, namespace=company_name)
+
+# Update the main block to use the new function
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Process text files and generate CSV for a company.')
+    parser = argparse.ArgumentParser(description='Process text files and upload to Pinecone for a company.')
     parser.add_argument('--company', type=str, required=True, help='The name of the company')
     args = parser.parse_args()
 
     company_name = args.company
 
-    process_txt_files_to_csv(company_name)
+    process_txt_files_to_pinecone(company_name)
 
-    print(f"CSV file for {company_name} has been generated!")
+    print(f"Data for {company_name} has been processed and uploaded to Pinecone!")

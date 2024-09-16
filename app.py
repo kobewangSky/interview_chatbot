@@ -6,20 +6,23 @@ import tiktoken  # For token counting
 from scipy import spatial 
 import os
 import secrets
+from pinecone import Pinecone
 
 secret_key = secrets.token_hex(32)
 
 app = Flask(__name__)
 app.secret_key = secret_key
 
-# Define the base path where all the data folders are stored
-DATA_FOLDER_PATH = "./utils/data/"
 
 DATABASE_CACHE = {}
 
 api_key = os.getenv('OPENAI_API_KEY')
-
 client = OpenAI(api_key=api_key)
+
+Pinecone_key = os.getenv('PINECONE_API_KEY')
+pc = Pinecone(api_key=Pinecone_key)
+Pinecone_index = pc.Index("interview-chatbot")
+
 EMBEDDING_MODEL = "text-embedding-3-small"
 GPT_MODEL = "gpt-3.5-turbo"
 
@@ -30,8 +33,6 @@ def num_tokens(text: str, model: str = GPT_MODEL) -> int:
 
 def strings_ranked_by_relatedness(
     query: str,
-    df: pd.DataFrame,
-    relatedness_fn=lambda x, y: 1 - spatial.distance.cosine(x, y),
     top_n: int = 100
 ) -> tuple[list[str], list[float]]:
     """Returns a list of strings and relatednesses, sorted from most related to least."""
@@ -39,23 +40,36 @@ def strings_ranked_by_relatedness(
         model=EMBEDDING_MODEL,
         input=query,
     )
+    
     query_embedding = query_embedding_response.data[0].embedding
-    strings_and_relatednesses = [
-        (row["Body"], relatedness_fn(query_embedding, row["embedding"]))
-        for i, row in df.iterrows()
-    ]
-    strings_and_relatednesses.sort(key=lambda x: x[1], reverse=True)
+    
+    query_results = Pinecone_index.query(
+        namespace=session['password'],
+        vector=query_embedding,
+        top_k=top_n,
+        include_metadata=True
+    )
+    
+    strings_and_relatednesses = []
+    for match in query_results['matches']:
+        if 'metadata' in match and 'body' in match['metadata']:
+            strings_and_relatednesses.append((match['metadata']['body'], match['score']))
+        else:
+            # If metadata or body is not available, use the id as a fallback
+            strings_and_relatednesses.append((f"Content for ID: {match['id']}", match['score']))
+    
+    if not strings_and_relatednesses:
+        return [], []
+    
     strings, relatednesses = zip(*strings_and_relatednesses)
-    return strings[:top_n], relatednesses[:top_n]
+    return list(strings), list(relatednesses)
 
 def query_message(
     query: str,
-    df: pd.DataFrame,
     model: str,
     token_budget: int
 ) -> str:
-    """Return a message for GPT, with relevant source texts pulled from a dataframe."""
-    strings, relatednesses = strings_ranked_by_relatedness(query, df, top_n=3)
+    strings, relatednesses = strings_ranked_by_relatedness(query, top_n=3)
     introduction = 'Use the below articles to answer the subsequent question."'
     question = f"\n\nQuestion: {query}"
     message = introduction
@@ -69,13 +83,12 @@ def query_message(
 
 def ask(
     query: str,
-    df: pd.DataFrame,
     model: str = GPT_MODEL,
     token_budget: int = 4096 - 500,
     print_message: bool = False,
 ) -> str:
     """Answers a query using GPT and a dataframe of relevant texts and embeddings."""
-    message = query_message(query, df, model=model, token_budget=token_budget)
+    message = query_message(query, model=model, token_budget=token_budget)
     if print_message:
         print(message)
     messages = [
@@ -90,21 +103,10 @@ def ask(
     response_message = response.choices[0].message.content
     return response_message
 
-def load_database(password: str) -> pd.DataFrame:
-    """Loads the database from the corresponding folder if it exists."""
-    if password in DATABASE_CACHE:
-        return DATABASE_CACHE[password]
-    
-    db_path = os.path.join(DATA_FOLDER_PATH, password, f"{password}.csv")
-    
-    if not os.path.exists(db_path):
-        raise FileNotFoundError(f"No database found for {password} at {db_path}")
-    
-    df = pd.read_csv(db_path)
-    df['embedding'] = df['embedding'].apply(ast.literal_eval)
-    
-    DATABASE_CACHE[password] = df
-    return df
+
+def namespace_exists(index, namespace):
+    namespaces = index.describe_index_stats()['namespaces']
+    return namespace in namespaces
 
 @app.route('/')
 def login():
@@ -114,15 +116,14 @@ def login():
 def do_login():
     company_name = request.form['company_name'].lower().strip()
     
-    # Check if the corresponding folder exists in utils/data/
-    company_data_path = os.path.join(DATA_FOLDER_PATH, company_name)
-    if os.path.isdir(company_data_path):
+    if namespace_exists(Pinecone_index, company_name):
         session['password'] = company_name
         session['assistant_name'] = company_name  # Using the folder name as the assistant name
         return redirect(url_for('index'))
     else:
         flash("Invalid company name. Please try again.")
         return redirect(url_for('login'))
+    
 
 @app.route('/index')
 def index():
@@ -141,11 +142,8 @@ def chat():
     user_input = request.form['user_input']
     password = session['password']
     
-    # Load (or retrieve from cache) the corresponding database
-    df = load_database(password)
-    
     # Use the ask function to get relevant text and generate a response
-    chatbot_response = ask(user_input, df, model=GPT_MODEL)
+    chatbot_response = ask(user_input, model=GPT_MODEL)
 
     return jsonify({'response': chatbot_response})
 
